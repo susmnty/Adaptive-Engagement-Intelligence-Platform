@@ -9,11 +9,11 @@ from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
-import joblib  # <-- import joblib for saving/loading models
+import joblib
 
 def load_data():
-    df = pd.read_csv('user_segments.csv')
-    print("[✓] Loaded user_segments.csv")
+    df = pd.read_csv('user_segments_with_anomalies.csv')
+    print("[✓] Loaded user_segments_with_anomalies.csv")
 
     features = ['total_sessions', 'avg_session_length', 'add_to_cart_rate', 
                 'purchase_rate', 'avg_spend', 'unique_categories']
@@ -83,6 +83,10 @@ def main():
     model_filename = f"{best_name.replace(' ', '_').lower()}_model.pkl"
     joblib.dump(best_model, model_filename)
     print(f"\n[✓] Saved best model as '{model_filename}'")
+
+    # Save updated data with churn column
+    df.to_csv('user_segments_with_churn_and_anomalies.csv', index=False)
+    print("[📁] Saved updated data as 'user_segments_with_churn_and_anomalies.csv'")
 
 if __name__ == '__main__':
     main()
