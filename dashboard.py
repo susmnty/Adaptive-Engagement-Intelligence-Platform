@@ -1,68 +1,126 @@
-# dashboard.py
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import numpy as np
 import plotly.express as px
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 
-st.set_page_config(page_title="Engagement Intelligence Dashboard", layout="wide")
-st.title("📊 Adaptive Engagement Intelligence Dashboard")
+# Page config
+st.set_page_config(layout="wide")
+st.title("Adaptive Engagement Intelligence Dashboard")
 
+# ---------- Load or simulate event data ----------
 @st.cache_data
 def load_data():
-    df = pd.read_csv("user_segments_with_strategies.csv")
+    try:
+        df = pd.read_csv("user_events.csv")  # Your real data file
+    except FileNotFoundError:
+        # Simulated fallback data
+        df = pd.DataFrame({
+            "user_id": np.random.choice([f"user{i}" for i in range(1, 51)], 500),
+            "event": np.random.choice(
+                ["product list visit", "visit product details", "add to cart", "checkout", "success"],
+                500,
+                p=[0.3, 0.25, 0.2, 0.15, 0.1]
+            ),
+            "product_id": np.random.randint(100, 110, 500)
+        })
     return df
 
-df = load_data()
+data = load_data()
 
-# Sidebar Filters
-st.sidebar.header("🔍 Filter Users")
+# ---------- Sidebar Inputs ----------
+with st.sidebar:
+    st.header("User Info & Event Input")
 
-segments = df['segment'].unique().tolist()
-selected_segments = st.sidebar.multiselect("Select Segments", segments, default=segments)
+    username = st.text_input("Username")
+    user_id = st.text_input("User ID")
+    product_id = st.text_input("Product ID")
+    event_type = st.selectbox("Event Type", [
+        "product list visit", "visit product details", "add to cart", "checkout", "success"
+    ])
 
-churn_filter = st.sidebar.selectbox("Churn Status", ["All", "Churned", "Not Churned"])
-show_anomalies = st.sidebar.checkbox("Only Show Anomalies", value=False)
-user_id = st.sidebar.text_input("Search by User ID")
+    if st.button("Register Event"):
+        if username and user_id and product_id:
+            new_row = pd.DataFrame([{
+                "user_id": user_id,
+                "event": event_type,
+                "product_id": product_id
+            }])
+            data = pd.concat([data, new_row], ignore_index=True)
+            st.success(f"Event '{event_type}' registered for user {user_id}")
+        else:
+            st.warning("Please fill all fields to register an event.")
 
-# Apply Filters
-filtered_df = df[df['segment'].isin(selected_segments)]
+# ---------- Funnel Stage Chart ----------
+st.subheader("Funnel Stage Distribution")
 
-if churn_filter == "Churned":
-    filtered_df = filtered_df[filtered_df['churn'] == 1]
-elif churn_filter == "Not Churned":
-    filtered_df = filtered_df[filtered_df['churn'] == 0]
+funnel_steps = ["product list visit", "visit product details", "add to cart", "checkout", "success"]
+funnel_counts = {
+    step: data[data["event"] == step]["user_id"].nunique() for step in funnel_steps
+}
+funnel_df = pd.DataFrame({
+    "Stage": list(funnel_counts.keys()),
+    "Users": list(funnel_counts.values())
+})
 
-if show_anomalies:
-    filtered_df = filtered_df[filtered_df['is_anomaly'] == 1]
+fig_funnel = px.bar(
+    funnel_df,
+    x="Stage",
+    y="Users",
+    color="Stage",
+    title="User Distribution Across Engagement Stages",
+    text="Users"
+)
+fig_funnel.update_traces(textposition="outside")
+st.plotly_chart(fig_funnel, use_container_width=True)
 
+# ---------- Show Dataset for Specific User ----------
 if user_id:
-    filtered_df = filtered_df[filtered_df['user_id'].str.contains(user_id, case=False)]
+    user_events = data[data['user_id'] == user_id]
+    st.subheader(f"Events for User ID: `{user_id}`")
+    st.dataframe(user_events, use_container_width=True)
+else:
+    st.info("Enter a User ID above to display their event history.")
 
-# Metrics Summary
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Users", len(filtered_df))
-col2.metric("Churned Users", int(filtered_df['churn'].sum()))
-col3.metric("Anomalies", int(filtered_df['is_anomaly'].sum()))
-col4.metric("Urgent Outreach Needed", int((filtered_df['retention_strategy'] == 'Urgent outreach').sum()))
+# ---------- Clustering Section ----------
+st.subheader("User Clustering (5 Segments)")
 
-# Segment Distribution
-st.subheader("User Segment Distribution")
-fig1 = px.histogram(filtered_df, x='segment', color='segment', title="User Segments")
-st.plotly_chart(fig1, use_container_width=True)
+pivot_df = data.pivot_table(index="user_id", columns="event", aggfunc="size", fill_value=0)
+pivot_df_std = StandardScaler().fit_transform(pivot_df)
 
-# Retention Strategy Breakdown
-st.subheader("Retention Strategy Allocation")
-fig2 = px.pie(filtered_df, names='retention_strategy', title='Retention Strategies')
-st.plotly_chart(fig2, use_container_width=True)
+kmeans = KMeans(n_clusters=5, random_state=42, n_init=10)
+clusters = kmeans.fit_predict(pivot_df_std)
 
-# Churn vs Anomaly
-st.subheader("Churn vs Anomaly Overlap")
-fig3 = px.scatter(filtered_df, x="avg_session_length", y="avg_spend", color="churn", 
-                  symbol="is_anomaly", hover_data=['retention_strategy'],
-                  title="Behavioral Plot: Session Length vs Spend")
-st.plotly_chart(fig3, use_container_width=True)
+pivot_df["cluster"] = clusters
 
-# Data Table
-st.subheader("📄 Detailed User Data")
-st.dataframe(filtered_df.head(50), use_container_width=True)
+# Cluster labeling (customizable)
+cluster_labels = {
+    0: "Window Shopper",
+    1: "Interested but Didn’t Buy",
+    2: "Cart Abandoner",
+    3: "Stuck at Checkout",
+    4: "Satisfied Customer"
+}
+pivot_df["cluster_label"] = pivot_df["cluster"].map(cluster_labels)
 
-st.caption("Built using Streamlit, Plotly, and scikit-learn")
+# Cluster pie chart
+cluster_summary = pivot_df["cluster"].value_counts().reset_index()
+cluster_summary.columns = ["Cluster", "Users"]
+cluster_summary["Label"] = cluster_summary["Cluster"].map(cluster_labels)
+
+fig_cluster = px.pie(
+    cluster_summary,
+    names="Label",
+    values="Users",
+    title="User Cluster Distribution"
+)
+st.plotly_chart(fig_cluster, use_container_width=True)
+
+# Display users by cluster
+st.markdown("### 👥 Users by Cluster")
+for cluster_id in sorted(pivot_df["cluster"].unique()):
+    users_in_cluster = pivot_df[pivot_df["cluster"] == cluster_id].index.tolist()
+    label = cluster_labels.get(cluster_id, f"Cluster {cluster_id}")
+    st.markdown(f"**Cluster {cluster_id} - {label}**")
+    st.json(users_in_cluster)
