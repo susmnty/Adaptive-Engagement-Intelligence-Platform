@@ -80,4 +80,4 @@ with open(RAW_LOGS_PATH, "w") as f:
 
         f.write(json.dumps(log) + "\n")
 
-print(f"[✓] Realistic raw logs generated: {RAW_LOGS_PATH}")
+print(f"[✓] Realistic raw logs generated: {RAW_LOGS_PATH}")    
