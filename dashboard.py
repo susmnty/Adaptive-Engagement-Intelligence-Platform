@@ -23,6 +23,9 @@ if 'order_status' not in st.session_state:
 if 'product_log' not in st.session_state:
     st.session_state.product_log = []
 
+if 'stage' not in st.session_state:
+    st.session_state.stage = {}
+
 # ---------- Step 1: User Onboarding ----------
 st.sidebar.header("User Onboarding")
 user_id = st.sidebar.text_input("Enter User ID")
@@ -40,6 +43,7 @@ if st.sidebar.button("Submit User Info"):
         }
         st.session_state.cart[user_id] = []
         st.session_state.order_status[user_id] = "browsing"
+        st.session_state.stage[user_id] = 'start'
         st.sidebar.success(f"User {user_id} onboarded successfully!")
     else:
         st.sidebar.warning("Enter valid User ID.")
@@ -49,43 +53,50 @@ st.header("Browse & Interact with Products")
 products = ["Apples", "Rice", "Milk", "Bread", "Toothpaste"]
 
 if user_id in st.session_state.users:
+    current_stage = st.session_state.stage[user_id]
     current_events = st.session_state.users[user_id]['events']
     cart = st.session_state.cart[user_id]
     status = st.session_state.order_status[user_id]
 
     selected_product = st.selectbox("Choose Product", products)
+
     col1, col2, col3 = st.columns(3)
 
-    with col1:
-        if st.button("View Product Detail"):
+    # Show only relevant button based on stage
+    if current_stage == 'start':
+        if col1.button("View Product Detail"):
             current_events.append("View Product Detail")
             st.session_state.product_log.append((user_id, selected_product, "Viewed", datetime.now()))
+            st.session_state.stage[user_id] = 'viewed'
             st.success(f"{selected_product} details viewed")
 
-    with col2:
-        if st.button("Add to Cart"):
+    elif current_stage == 'viewed':
+        if col2.button("Add to Cart"):
             cart.append(selected_product)
             current_events.append("Add to Cart")
             st.session_state.product_log.append((user_id, selected_product, "Added to Cart", datetime.now()))
+            st.session_state.stage[user_id] = 'added'
             st.success(f"{selected_product} added to cart")
 
-    with col3:
-        if cart and status == "browsing" and st.button("Checkout"):
+    elif current_stage == 'added':
+        if col3.button("Checkout"):
             current_events.append("Checkout")
             st.session_state.order_status[user_id] = "checkout"
             st.session_state.product_log.append((user_id, selected_product, "Checkout", datetime.now()))
+            st.session_state.stage[user_id] = 'checkout'
             st.success("Proceeding to checkout")
 
-    # Always show this if user is in checkout state
-    if status == "checkout":
+    elif current_stage == 'checkout':
         st.info("You are in checkout stage. Please confirm your purchase.")
         if st.button("Confirm Purchase"):
             current_events.append("Purchase Success")
             st.session_state.order_status[user_id] = "purchased"
             st.session_state.product_log.append((user_id, selected_product, "Purchased", datetime.now()))
-            st.success("Order Placed Successfully!")
-            st.session_state.cart[user_id] = []  # Clear cart after purchase
+            st.session_state.cart[user_id] = []
+            st.session_state.stage[user_id] = 'start'
+            st.success("Order Placed Successfully! You can now buy another product.")
 
+    # Show cart and logs
     st.markdown("---")
     st.subheader("Your Cart")
     st.write(cart)
@@ -98,14 +109,8 @@ if user_id in st.session_state.users:
     interaction_df = interaction_df.sort_values(by="Time", ascending=False)
     st.dataframe(interaction_df)
 
-    # Download as CSV
     csv = interaction_df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="Download Interaction Log as CSV",
-        data=csv,
-        file_name='product_interaction_log.csv',
-        mime='text/csv'
-    )
+    st.download_button("Download Interaction Log as CSV", data=csv, file_name='product_interaction_log.csv', mime='text/csv')
 
 else:
     st.info("Please complete user onboarding to proceed.")
