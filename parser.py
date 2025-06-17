@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# Constants
 RAW_LOGS = Path("data/raw_logs.jsonl")
 STRUCTURED_CSV = Path("data/structured_data.csv")
 SESSION_TIMEOUT = timedelta(minutes=30)
@@ -13,7 +14,7 @@ def load_logs():
     with open(RAW_LOGS, 'r') as f:
         for line in f:
             event = json.loads(line.strip())
-            meta = event.get("meta", {})  # Safely handle missing meta field
+            meta = event.get("meta", {})  # Handle missing meta field safely
             row = {
                 "user_id": event.get("uid"),
                 "event": event.get("event"),
@@ -48,7 +49,8 @@ def assign_sessions(df):
 def main():
     df = load_logs()
     df = assign_sessions(df)
-    df["timestamp"] = df["timestamp"].dt.isoformat()  # Optional: Make timestamp string for CSV
+    df["timestamp"] = df["timestamp"].apply(lambda x: x.isoformat())  # ✅ Fixed datetime serialization
+    STRUCTURED_CSV.parent.mkdir(parents=True, exist_ok=True)  # Ensure output folder exists
     df.to_csv(STRUCTURED_CSV, index=False)
     print(f"[✓] Parsed {len(df)} log events")
     print(f"[✓] Structured CSV written to: {STRUCTURED_CSV}")

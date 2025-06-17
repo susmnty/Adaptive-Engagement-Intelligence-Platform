@@ -12,18 +12,23 @@ def extract_features(df):
     features = []
     for user_id, group in df.groupby("user_id"):
         session_counts = group["session_id"].nunique()
+        
+        # Get session durations
         session_lengths = group.groupby("session_id")["timestamp"].agg(["min", "max"])
         session_durations = (session_lengths["max"] - session_lengths["min"]).dt.total_seconds() / 60
-        avg_session_length = session_durations.mean()
+        avg_session_length = session_durations.mean() if not session_durations.empty else 0
 
         total_events = len(group)
         add_to_cart = (group["event"] == "add_to_cart").sum()
         purchase = (group["event"] == "purchase").sum()
-        view = (group["event"] == "view_product").sum()
 
         add_to_cart_rate = add_to_cart / total_events if total_events else 0
         purchase_rate = purchase / total_events if total_events else 0
-        avg_spend = group[group["event"] == "purchase"]["price"].mean() or 0
+        
+        # Safely calculate average spend
+        purchases = group[group["event"] == "purchase"]
+        avg_spend = purchases["price"].mean() if not purchases.empty else 0
+        
         unique_categories = group["category"].nunique()
 
         features.append({
@@ -41,6 +46,7 @@ def extract_features(df):
 def main():
     df = load_data()
     user_features = extract_features(df)
+    FEATURES_CSV.parent.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
     user_features.to_csv(FEATURES_CSV, index=False)
     print(f"[✓] User features written to: {FEATURES_CSV}")
     print(user_features.head())
