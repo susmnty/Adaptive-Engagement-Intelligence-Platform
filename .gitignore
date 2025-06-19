@@ -1,0 +1,8 @@
+# Ignore CSV data files
+*.csv
+
+# Ignore pickle model files
+*.pkl
+
+# Optional: Ignore log files
+*.log

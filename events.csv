@@ -1,9 +1,0 @@
-username,product_id,event
-user01,P123,Product List
-user05,P124,Product List
-user02,P324,Product Detail
-user06,P398,Product Detail
-user03,P456,Add to Cart
-user04,P785,Checkout
-user07,P632,Success
-user08,P354,Success
